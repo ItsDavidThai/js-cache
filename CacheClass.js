@@ -7,107 +7,165 @@
 // - should be able to handle multiple levels of caching (ie, be able to look into a larger/parent cache if there is a cache miss)
 
 
-// Simple Fixed Array Class to limit Array Size
-function FixedArray(size){
-  this.size = size || 10
-  this.list = []
-}
-FixedArray.prototype.getLength = function(){
-    return this.list.length
-}
-FixedArray.prototype.write = function(index, value){
-    if(index > this.size - 1){
-        console.log('exceeds array size')
-        return false
-    }
-    this.list[index] = value
-}
-FixedArray.prototype.push = function(value){
-    if(this.list.length > this.size){
-        console.log('exceeds array size')
-        return false
-    } else {
-      this.list.push(value)
-    }
-
-}
-FixedArray.prototype.read = function(index){
-    return this.list[index]
-}
-
-
 
 // will stringify value passed in and will xor each char code and multiply by a FNV prime resulting in a unique hash
-function addressHashing(value, hashingFactor){
+function addressHashing(value, hashingFactor) {
     var hash = 0
     var hashingFactor = hashingFactor || 16777619
-    JSON.stringify(value).split('').forEach(function(element){
+    JSON.stringify(value).split('').forEach(function(element) { 
         hash = hash ^ element.charCodeAt(0)
         hash *= hashingFactor
     })
     return hash
 }
 // hashing function to find the index in the initial set
-function cacheSetHash(key, setSize){
-  return key.length % setSize
+function cacheSetHash(key, cacheSetSize){
+  return key.length % cacheSetSize
+}
+/*
+  Queue Constructor
+*/
+function Queue() {
+  this.queue = []
+}
+Queue.prototype.enqueue = function (value) {
+  this.queue.push(value)
+}
+Queue.prototype.dequeue = function () {
+  return this.queue.shift()
+}
+Queue.prototype.getSize = function () {
+  return this.queue.length
+}
+Queue.prototype.getState= function () {
+  return this.queue.slice()
 }
 
 
+
 // sets combine mapped and associative properties 
-function jsCache(setSize, blockSize){
-  this.setSize = setSize
-  this.blockSize = blockSize  
-  this.set = new FixedArray(setSize)
+function jsCache(cacheSetSize, setBlockSize, store, parentCache) {
+  this.cacheSetSize = cacheSetSize
+  this.setBlockSize = setBlockSize
+  this.parentCache = parentCache 
+  this.store = store  
+  this.cacheSets = []
 
   // create empty arrays to hold data
-  for(var i = 0; i < setSize; i++){
-    this.set.write(i, new FixedArray(blockSize))
+  for(var i = 0; i < cacheSetSize; i++){
+    this.cacheSets[i] = new Queue
   }
 }
 // write information to cache after finding the set and the block
 jsCache.prototype.writeToCache = function(key, value){
-  var setIndex = cacheSetHash(key, this.setSize);
-  var block = this.set.read(setIndex)
-  var address = addressHashing(value)
-  block.push([key, address, value])
+  // find the set using a hash
+  var cacheSetsIndex = cacheSetHash(key, this.cacheSetSize);
+  // find the position of the data in that set 
+  var cacheBlock = this.cacheSets[cacheSetsIndex]
+  var cacheLine = this.checkCacheSet(key)
+  var parentCache = this.parentCache
+  /*
+    CACHE HIT
+  */
+  if(cacheLine["matchFound"] === true) {
+
+    // update value in cache current cache
+    cacheLine["data"][1] = value
+
+
+  /*
+    CACHE MISS
+  */ 
+
+  } else if (cacheLine["matchFound"] === false && cacheLine["hasRoom"] === true) {
+    // add data to block
+    // if cache-miss and there is no empty spot
+    cacheBlock.enqueue([key, value])
+
+  } else if (cacheLine["matchFound"] === false && cacheLine["hasRoom"] === false){
+    // evict last element 
+    cacheBlock.dequeue()
+    // push in new data to the set
+    cacheBlock.enqueue([key, value])
+      // if there is no lower level cache, update the store
+      this.writeToStore(key, value)
+
+  }
+  // update any lower level caches
+  if(parentCache){
+    parentCache.writeToCache(key, value)
+  } 
+
 }
+
+jsCache.prototype.writeToStore = function(key, value) {
+  this.store[key] = value
+}
+
 // check to see if there is room 
 jsCache.prototype.checkCacheSet = function(key){
-  var setIndex = cacheSetHash(key, this.setSize)
-  var setBlock = this.set.read(setIndex)
-  var emptySpot = false
+  debugger
+  var cacheSetsIndex = cacheSetHash(key, this.cacheSetSize);
+  var cacheSetBlock = this.cacheSets[cacheSetsIndex].getState()
+
+  var hasRoom = cacheSetBlock.length < this.setBlockSize ? true : false;
   var matchFound = false
-  for(var i = 0; i < setBlock.list.length; i++){
+  var data;
+
+  
+  
+  for(var i = 0; i < cacheSetBlock.length; i++){
     // check to see if there is an empty spot in block
-    if(!setBlock.list[i]){
-      emptySpot = true
+    // TODO add a way to check if really empty of spot is altered
+
+    if(!cacheSetBlock[i].length === 0){
+
     } else {
       // check to see if information is in the set
-      if(setBlock.list[i][0] === key){
+      if(cacheSetBlock[i][0] === key){
         matchFound = true
+        data = cacheSetBlock[i]
       }
     }
-  }  
+  }
+
   // return an object with the status of this set
   return {
-    emptySpot: emptySpot,
-    matchFound: matchFound
-    // TODO return also the block and index so we don't repeat code maybe refactor the caching
+    hasRoom: hasRoom,
+    matchFound: matchFound,
+    data: data
   }
 }
 
 
 // retrieve information from assoiative block
-jsCache.prototype.retrieveFromBlock = function(key){
-  var setIndex = cacheSetHash(key, this.setSize)
-  var block = this.set.read(setIndex)
-  for(var i = 0; i < block.size; i++){
-    if(block.list[i]){
-      if(block.list[i][0] === key){
-        return block.list[i][2]        
-      }
+jsCache.prototype.fetchData = function(key){
+  var cacheLine = this.checkCacheSet(key)
+
+  /*
+    Cache Hit
+  */
+  if(cacheLine['matchFound']){
+    return cacheLine['data'][1]
+  } else {
+  /*
+    Cache Miss
+  */
+  debugger
+    var parentCache = this.parentCache
+    if(parentCache){
+      return parentCache.fetchData(key)
+    } else {
+      return this.fetchDataFromStore(key)
     }
+
   }
+
+}
+
+jsCache.prototype.fetchDataFromStore = function(key) {
+  debugger
+  return this.store[key]
 }
 // information is in our cache
 jsCache.cacheHit = function(purpose){

@@ -1,56 +1,78 @@
 describe("JSCacheClass", function() {
+  var cache;
+  var store = {
 
-  describe('FixedArrayFunction', function() {
-    var testArray;
-    beforeEach(function() {
-      testArray = new FixedArray(10)
-    })
+  }
+  beforeEach(function() {
+    cache2 = new jsCache(6,6, store)
+    cache = new jsCache(3, 3, store, cache2)
+  })
 
-    it('should exist', function() {
-      expect(testArray).to.be.an('object')
-    })
-    it('should have a write method', function() {
-      testArray.write(0, 'abc')
-      testArray.write(1, 'cde')
-      expect(testArray.read(0)).to.equal('abc')
-      expect(testArray.read(1)).to.equal('cde')
-    })
-    it('should have a read method', function() {
-      expect(testArray).to.be.equal('object')
-    })
-    it('should have a modify method', function() {
-      expect(testArray).to.be.equal('object')
-    })
+  it('should exist', function() {
+    expect(cache).to.be.an('object')
+  })
 
+  describe('CacheHits', function() {
+    it('should write to the cache', function() {
+      cache.writeToCache('abc', 'foobar')
+      var checkCache = cache.checkCacheSet('abc')
+      expect(checkCache["data"]).to.deep.equal(['abc', 'foobar'])
+      expect(checkCache["matchFound"]).to.equal(true)
+    })
+    it('should reupdate value on cache hit', function() {
+      cache.writeToCache('abc', 'foobar')
+      cache.writeToCache('abc', 'helloworld')
+      var checkCache = cache.checkCacheSet('abc')
+      expect(checkCache["data"]).to.deep.equal(['abc', 'helloworld'])
+      expect(checkCache["matchFound"]).to.equal(true)
+    })
+    it('should writeback to store if information is evicted', function() {
+      
+    })
+    it('should check if data is in cache or if there is room in the set', function() {
+      cache.checkCacheSet() 
+    })
+    it('should update lower level stores if possible', function() {
+      
+    })
+    describe('fetching data', function() {
+      it('should fetch data from the cache', function() {
+        cache.writeToCache('abc', 'foobar1')
+        expect(cache.fetchData('abc')).to.equal('foobar1')        
+      })
+      it('should fetch from store if not in cache', function() {
+        store['cde'] = 'edc123'
+        expect(cache.fetchData('cde')).to.equal('edc123')        
+      })
+      it('should fetch from parent cache if not in current cache', function() {
+        cache2.writeToCache('def', '123fed')
+        expect(cache.fetchData('def')).to.equal('123fed')        
+      })
+    })
+  })
 
+  describe('CacheMisses', function() {
+    describe('write back', function() {
+      it('should evict data from the block when full and update the store with the evicted data', function() {
+        // add data to cache
+        cache.writeToCache('1', 'foobar')
+        cache.writeToCache('2', 'foobar')
+        cache.writeToCache('3', 'foobar')
+        cache.writeToCache('4', 'helloworld')
+
+        var checkCacheKey1 = cache.checkCacheSet('1')
+        var checkCacheKey4 = cache.checkCacheSet('4')
+
+        // adding 4 should evict the first item in queue
+        // 1 [2,3,4]
+        expect(store['4']).to.equal('helloworld')
+        // after evicting should not be in cache
+        expect(checkCacheKey1['matchFound']).to.equal(false)
+        expect(checkCacheKey1['data']).to.equal(undefined)
+      })
+      
+    })
   })
 
 })
 
-// Simple Fixed Array Class to limit Array Size
-function FixedArray(size){
-  this.size = size || 10
-  this.list = []
-}
-FixedArray.prototype.getLength = function(){
-    return this.list.length
-}
-FixedArray.prototype.write = function(index, value){
-    if(index > this.size - 1){
-        console.log('exceeds array size')
-        return false
-    }
-    this.list[index] = value
-}
-FixedArray.prototype.push = function(value){
-    if(this.list.length > this.size){
-        console.log('exceeds array size')
-        return false
-    } else {
-      this.list.push(value)
-    }
-
-}
-FixedArray.prototype.read = function(index){
-    return this.list[index]
-}
