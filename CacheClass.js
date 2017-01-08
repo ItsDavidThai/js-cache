@@ -7,21 +7,11 @@
 // - should be able to handle multiple levels of caching (ie, be able to look into a larger/parent cache if there is a cache miss)
 
 
-
-// will stringify value passed in and will xor each char code and multiply by a FNV prime resulting in a unique hash
-function addressHashing(value, hashingFactor) {
-    var hash = 0
-    var hashingFactor = hashingFactor || 16777619
-    JSON.stringify(value).split('').forEach(function(element) { 
-        hash = hash ^ element.charCodeAt(0)
-        hash *= hashingFactor
-    })
-    return hash
-}
 // hashing function to find the index in the initial set
 function cacheSetHash(key, cacheSetSize){
   return key.length % cacheSetSize
 }
+
 /*
   Queue Constructor
 */
@@ -44,7 +34,7 @@ Queue.prototype.getState= function () {
 
 
 // sets combine mapped and associative properties 
-function jsCache(cacheSetSize, setBlockSize, store, parentCache) {
+function jsCache(cacheSetSize, setBlockSize, store, parentCache, childCache) {
   this.cacheSetSize = cacheSetSize
   this.setBlockSize = setBlockSize
   this.parentCache = parentCache 
@@ -83,6 +73,7 @@ jsCache.prototype.writeToCache = function(key, value){
     cacheBlock.enqueue([key, value])
 
   } else if (cacheLine["matchFound"] === false && cacheLine["hasRoom"] === false){
+
     // evict last element 
     cacheBlock.dequeue()
     // push in new data to the set
@@ -104,7 +95,7 @@ jsCache.prototype.writeToStore = function(key, value) {
 
 // check to see if there is room 
 jsCache.prototype.checkCacheSet = function(key){
-  debugger
+
   var cacheSetsIndex = cacheSetHash(key, this.cacheSetSize);
   var cacheSetBlock = this.cacheSets[cacheSetsIndex].getState()
 
@@ -151,11 +142,18 @@ jsCache.prototype.fetchData = function(key){
   /*
     Cache Miss
   */
-  debugger
     var parentCache = this.parentCache
     if(parentCache){
-      return parentCache.fetchData(key)
+      // recursive calls from child -> parent on cache miss
+      var data = parentCache.fetchData(key)
+      // on cache miss fetch we allocate the data to the caches that had cache misses
+      this.writeToCache(key, data)
+      // return data from top most cache
+      return data
     } else {
+      // if caches all missed, fetch from store.
+      debugger
+      this.writeToCache(key, data)
       return this.fetchDataFromStore(key)
     }
 
@@ -164,37 +162,14 @@ jsCache.prototype.fetchData = function(key){
 }
 
 jsCache.prototype.fetchDataFromStore = function(key) {
-  debugger
   return this.store[key]
 }
-// information is in our cache
-jsCache.cacheHit = function(purpose){
-  // read
 
-
-  // write
-
-}
-
-
-// information is not in our cache
-// purose - read or write
-jsCache.cacheMiss = function(purpose){
-  
-
-}
-
-jsCache.writeBack = function(){
-  
-
-}
 
 // store is represented as key:value pairs
 // the key represents the address 
 function Store(){
-  this.store = {
-
-  }
+  this.store = {}
 }
 
 
