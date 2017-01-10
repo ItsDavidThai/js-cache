@@ -1,5 +1,6 @@
 How to Run Tests
-Open SpecRunner.html in your browser.
+
+	Open SpecRunner.html in your browser.
 
 
 
