@@ -34,13 +34,16 @@ Cache Class Design
 	Data is found by looping through the items in the Queue and comparing the keys
 
 3.0 Cache Behaviors
-	Cache Hit
+
+	3.1 Cache Hit
+	
 		Read
 		If requested data is found in l1 cache, it is returned
 
 		Write
 		If cache has room, data is written in the cache but not in the store
-	Cache Miss
+	3.2 Cache Miss
+	
 		Read-Allocate
 		On cache miss, check lower level caches and finally store
 		Allocate data to caches
@@ -53,6 +56,7 @@ Cache Class Design
 		If Queue is full, dequeue first item in Queue to make room for new data
 
 4.0 User Interface
+
 	Instantiate a Cache and Store
 	var store = new Store()
 	var cache = new jsCache(cacheSetSize, setBlockSize, store, parentCache)
